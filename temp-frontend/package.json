@@ -1,0 +1,39 @@
+{
+  "name": "modernize-next-free",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@emotion/cache": "latest",
+    "@emotion/react": "latest",
+    "@emotion/server": "latest",
+    "@emotion/styled": "latest",
+    "@mui/icons-material": "latest",
+    "@mui/lab": "latest",
+    "@mui/material": "latest",
+    "@mui/x-date-pickers": "latest",
+    "@tabler/icons-react": "latest",
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "apexcharts": "latest",
+    "date-fns": "latest",
+    "lodash": "latest",
+    "next": "latest",
+    "react": "latest",
+    "react-apexcharts": "latest",
+    "react-dom": "latest",
+    "react-helmet-async": "latest",
+    "typescript": "latest"
+  },
+  "devDependencies": {
+    "@types/lodash": "latest",
+    "eslint": "latest",
+    "eslint-config-next": "latest"
+  }
+}
