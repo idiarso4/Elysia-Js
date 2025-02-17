@@ -44,6 +44,192 @@ elysia/
 - TypeScript
 - JWT Authentication
 
+## API Documentation
+
+### Authentication
+
+#### Login
+```http
+POST /api/auth/login
+```
+
+Request body:
+```json
+{
+    "username": "string",
+    "password": "string"
+}
+```
+
+Response:
+```json
+{
+    "token": "string",
+    "user": {
+        "id": "string",
+        "username": "string",
+        "role": "admin" | "teacher" | "staff",
+        "name": "string",
+        "email": "string",
+        "nip": "string"
+    }
+}
+```
+
+### User Management (Admin Only)
+
+#### Get All Users
+```http
+GET /api/users
+```
+Headers:
+```
+Authorization: Bearer <token>
+```
+
+Response:
+```json
+[
+    {
+        "id": "string",
+        "username": "string",
+        "role": "admin" | "teacher" | "staff",
+        "name": "string",
+        "email": "string",
+        "nip": "string",
+        "status": "active" | "inactive"
+    }
+]
+```
+
+#### Get User by ID
+```http
+GET /api/users/:id
+```
+Headers:
+```
+Authorization: Bearer <token>
+```
+
+Response:
+```json
+{
+    "id": "string",
+    "username": "string",
+    "role": "admin" | "teacher" | "staff",
+    "name": "string",
+    "email": "string",
+    "nip": "string",
+    "status": "active" | "inactive"
+}
+```
+
+#### Create User
+```http
+POST /api/users
+```
+Headers:
+```
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+Request body:
+```json
+{
+    "username": "string",
+    "password": "string",
+    "role": "admin" | "teacher" | "staff",
+    "name": "string",
+    "email": "string",
+    "nip": "string"
+}
+```
+
+Response:
+```json
+{
+    "message": "User created successfully",
+    "id": "string"
+}
+```
+
+#### Update User
+```http
+PUT /api/users/:id
+```
+Headers:
+```
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+Request body:
+```json
+{
+    "name": "string",
+    "email": "string",
+    "nip": "string",
+    "status": "active" | "inactive",
+    "password": "string" // Optional
+}
+```
+
+Response:
+```json
+{
+    "message": "User updated successfully"
+}
+```
+
+#### Delete User
+```http
+DELETE /api/users/:id
+```
+Headers:
+```
+Authorization: Bearer <token>
+```
+
+Response:
+```json
+{
+    "message": "User deleted successfully"
+}
+```
+
+### Error Responses
+
+All endpoints may return these error responses:
+
+#### 401 Unauthorized
+```json
+{
+    "message": "Invalid token"
+}
+```
+
+#### 403 Forbidden
+```json
+{
+    "message": "Forbidden: Admin access required"
+}
+```
+
+#### 404 Not Found
+```json
+{
+    "message": "Resource not found"
+}
+```
+
+#### 500 Internal Server Error
+```json
+{
+    "message": "Internal server error"
+}
+```
+
 ## Getting Started
 
 ### Prerequisites

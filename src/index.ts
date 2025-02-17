@@ -11,6 +11,7 @@ import type { Student, Guardian, Attendance, AcademicRecord, User, LoginResponse
 import { authController } from './controllers/auth';
 import bcrypt from 'bcrypt';
 import jwtToken from 'jsonwebtoken';
+import { usersController } from './controllers/users';
 
 interface JWTPayload extends Record<string, string | number> {
     id: string;
@@ -39,9 +40,20 @@ const JWT_SECRET = 'your-super-secret-key';
 
 const app = new Elysia()
     .use(cors({
-        origin: ['http://localhost:3000'],
-        methods: ['GET', 'POST', 'PUT', 'DELETE'],
+        origin: (request) => {
+            const origin = request.headers.get('origin');
+            if (origin && (
+                origin === 'http://localhost:3000' ||
+                origin.startsWith('https://your-production-domain.com')
+            )) {
+                return origin;
+            }
+            return false;
+        },
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
         credentials: true,
+        allowedHeaders: ['Content-Type', 'Authorization'],
+        maxAge: 600,
     }))
     .use(swagger({
         documentation: {
@@ -59,7 +71,8 @@ const app = new Elysia()
                 { name: 'students', description: 'Student management endpoints' },
                 { name: 'guardians', description: 'Guardian management endpoints' },
                 { name: 'attendance', description: 'Attendance tracking endpoints' },
-                { name: 'academics', description: 'Academic records endpoints' }
+                { name: 'academics', description: 'Academic records endpoints' },
+                { name: 'users', description: 'User management endpoints' }
             ],
             components: {
                 securitySchemes: {
@@ -81,6 +94,7 @@ const app = new Elysia()
     .use(cookie())
     .use(auth)
     .use(authController)
+    .use(usersController)
     .onError(({ code, error, set }) => {
         if (error instanceof AuthError || error instanceof ValidationError) {
             set.status = error.status;
@@ -214,6 +228,131 @@ const app = new Elysia()
             }
         }
     )
+
+    // User Management Routes (Admin only)
+    .get('/api/users', async ({ headers }) => {
+        const token = headers.authorization?.split(' ')[1];
+        if (!token || !(await requireRole(token, 'admin'))) {
+            return {
+                status: 403,
+                body: { message: 'Forbidden: Admin access required' }
+            };
+        }
+
+        try {
+            const users = await usersController.getUsers();
+            return {
+                status: 200,
+                body: users
+            };
+        } catch (error) {
+            return {
+                status: 500,
+                body: { message: 'Failed to fetch users' }
+            };
+        }
+    })
+
+    .get('/api/users/:id', async ({ params: { id }, headers }) => {
+        const token = headers.authorization?.split(' ')[1];
+        if (!token || !(await requireRole(token, 'admin'))) {
+            return {
+                status: 403,
+                body: { message: 'Forbidden: Admin access required' }
+            };
+        }
+
+        try {
+            const user = await usersController.getUserById(id);
+            if (!user) {
+                return {
+                    status: 404,
+                    body: { message: 'User not found' }
+                };
+            }
+            return {
+                status: 200,
+                body: user
+            };
+        } catch (error) {
+            return {
+                status: 500,
+                body: { message: 'Failed to fetch user' }
+            };
+        }
+    })
+
+    .post('/api/users', async ({ body, headers }) => {
+        const token = headers.authorization?.split(' ')[1];
+        if (!token || !(await requireRole(token, 'admin'))) {
+            return {
+                status: 403,
+                body: { message: 'Forbidden: Admin access required' }
+            };
+        }
+
+        try {
+            const id = await usersController.createUser(body);
+            return {
+                status: 201,
+                body: { message: 'User created successfully', id }
+            };
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to create user';
+            return {
+                status: 400,
+                body: { message }
+            };
+        }
+    })
+
+    .put('/api/users/:id', async ({ params: { id }, body, headers }) => {
+        const token = headers.authorization?.split(' ')[1];
+        if (!token || !(await requireRole(token, 'admin'))) {
+            return {
+                status: 403,
+                body: { message: 'Forbidden: Admin access required' }
+            };
+        }
+
+        try {
+            await usersController.updateUser(id, body);
+            return {
+                status: 200,
+                body: { message: 'User updated successfully' }
+            };
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to update user';
+            return {
+                status: 400,
+                body: { message }
+            };
+        }
+    })
+
+    .delete('/api/users/:id', async ({ params: { id }, headers }) => {
+        const token = headers.authorization?.split(' ')[1];
+        if (!token || !(await requireRole(token, 'admin'))) {
+            return {
+                status: 403,
+                body: { message: 'Forbidden: Admin access required' }
+            };
+        }
+
+        try {
+            await usersController.deleteUser(id);
+            return {
+                status: 200,
+                body: { message: 'User deleted successfully' }
+            };
+        } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to delete user';
+            return {
+                status: 400,
+                body: { message }
+            };
+        }
+    })
 
     // Guardian Management
     .post("/students/:studentId/guardians",
@@ -641,10 +780,9 @@ const app = new Elysia()
                     content: {
                         'application/json': {
                             schema: t.Object({
-                                error: t.String(),
-                                code: t.Number()
-                            })
-                        }
+                            error: t.String(),
+                            code: t.Number()
+                        })
                     }
                 }
             }
