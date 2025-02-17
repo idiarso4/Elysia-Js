@@ -4,57 +4,155 @@ import { swagger } from "@elysiajs/swagger";
 import { staticPlugin } from '@elysiajs/static';
 import { jwt } from '@elysiajs/jwt';
 import { cookie } from '@elysiajs/cookie';
-import { auth, validateUser, requireRole } from './middleware/auth';
+import { auth, validateUser, requireRole, AuthError, ValidationError } from './middleware/auth';
 import DB from './database/db';
 import { randomUUID } from 'crypto';
 import type { Student, Guardian, Attendance, AcademicRecord, User, LoginResponse } from './types';
 
-interface JWTPayload {
+interface JWTPayload extends Record<string, string | number> {
     id: string;
     username: string;
-    role: string;
+    role: 'admin' | 'teacher' | 'staff';
+    iat?: number;
+    exp?: number;
 }
-
-type JWTContext = {
-    jwt: {
-        sign: (payload: JWTPayload) => Promise<string>;
-        verify: (token: string) => Promise<JWTPayload | null>;
-    };
-};
 
 const app = new Elysia()
     .use(cors())
-    .use(swagger())
+    .use(swagger({
+        documentation: {
+            info: {
+                title: 'Student Management System API',
+                version: '1.0.0',
+                description: 'API for managing student data, attendance, and academic records',
+                contact: {
+                    name: 'API Support',
+                    email: 'support@example.com'
+                }
+            },
+            tags: [
+                { name: 'auth', description: 'Authentication endpoints' },
+                { name: 'students', description: 'Student management endpoints' },
+                { name: 'guardians', description: 'Guardian management endpoints' },
+                { name: 'attendance', description: 'Attendance tracking endpoints' },
+                { name: 'academics', description: 'Academic records endpoints' }
+            ],
+            components: {
+                securitySchemes: {
+                    bearerAuth: {
+                        type: 'http',
+                        scheme: 'bearer',
+                        bearerFormat: 'JWT'
+                    }
+                }
+            }
+        }
+    }))
     .use(staticPlugin())
     .use(jwt({
         name: 'jwt',
-        secret: process.env.JWT_SECRET || 'your-secret-key'
+        secret: process.env.JWT_SECRET || 'your-secret-key',
+        exp: '7d'
     }))
     .use(cookie())
     .use(auth)
+    .onError(({ code, error, set }) => {
+        if (error instanceof AuthError || error instanceof ValidationError) {
+            set.status = error.status;
+            return {
+                error: error.message,
+                code: error.status
+            };
+        }
+        
+        // Default error handling
+        set.status = code === 'NOT_FOUND' ? 404 : 500;
+        return {
+            error: error.message,
+            code: set.status
+        };
+    })
     .get("/", () => Bun.file("public/index.html"))
     
     // Authentication
-    .post("/login", async ({ body, jwt }: { body: { username: string; password: string; }; } & JWTContext): Promise<LoginResponse> => {
-        try {
-            const user = await validateUser(body.username, body.password);
-            const token = await jwt.sign({
-                id: user.id,
-                username: user.username,
-                role: user.role
-            });
+    .post("/login", 
+        async ({ body, jwt }) => {
+            const { username, password } = body as { username: string; password: string };
             
-            return {
-                token,
-                user: {
+            try {
+                const user = await validateUser(username, password);
+                const payload: JWTPayload = {
+                    id: user.id,
                     username: user.username,
-                    role: user.role
+                    role: user.role as 'admin' | 'teacher' | 'staff'
+                };
+                
+                const token = await jwt.sign(payload);
+                
+                return {
+                    token,
+                    user: {
+                        username: user.username,
+                        role: user.role
+                    }
+                } satisfies LoginResponse;
+            } catch (error) {
+                if (error instanceof ValidationError) {
+                    throw error;
                 }
-            };
-        } catch (error) {
-            throw new Error('Invalid credentials');
+                throw new AuthError('Authentication failed');
+            }
+        },
+        {
+            body: t.Object({
+                username: t.String({ minLength: 3, description: 'User login username' }),
+                password: t.String({ minLength: 6, description: 'User login password' })
+            }),
+            detail: {
+                tags: ['auth'],
+                summary: 'Login to the system',
+                description: 'Authenticate user and get JWT token',
+                responses: {
+                    '200': {
+                        description: 'Successfully authenticated',
+                        content: {
+                            'application/json': {
+                                schema: t.Object({
+                                    token: t.String(),
+                                    user: t.Object({
+                                        username: t.String(),
+                                        role: t.String()
+                                    })
+                                })
+                            }
+                        }
+                    },
+                    '400': {
+                        description: 'Validation error',
+                        content: {
+                            'application/json': {
+                                schema: t.Object({
+                                    error: t.String(),
+                                    code: t.Number()
+                                })
+                            }
+                        }
+                    },
+                    '401': {
+                        description: 'Authentication failed',
+                        content: {
+                            'application/json': {
+                                schema: t.Object({
+                                    error: t.String(),
+                                    code: t.Number()
+                                })
+                            }
+                        }
+                    }
+                }
+            }
         }
-    })
+    )
 
     // Guardian Management
     .post("/students/:studentId/guardians",
@@ -84,7 +182,36 @@ const app = new Elysia()
                 phone: t.String(),
                 email: t.Optional(t.String()),
                 address: t.String()
-            })
+            }),
+            detail: {
+                tags: ['guardians'],
+                summary: 'Add a guardian to a student',
+                description: 'Create a new guardian record for a student',
+                responses: {
+                    '200': {
+                        description: 'Guardian added successfully',
+                        content: {
+                            'application/json': {
+                                schema: t.Object({
+                                    message: t.String(),
+                                    id: t.String()
+                                })
+                            }
+                        }
+                    },
+                    '400': {
+                        description: 'Validation error',
+                        content: {
+                            'application/json': {
+                                schema: t.Object({
+                                    error: t.String(),
+                                    code: t.Number()
+                                })
+                            }
+                        }
+                    }
+                }
+            }
         }
     )
 
@@ -97,6 +224,33 @@ const app = new Elysia()
             return guardians;
         } catch (error) {
             return [];
+        }
+    },
+    {
+        detail: {
+            tags: ['guardians'],
+            summary: 'Get guardians of a student',
+            description: 'Retrieve a list of guardians for a student',
+            responses: {
+                '200': {
+                    description: 'Guardians retrieved successfully',
+                    content: {
+                        'application/json': {
+                            schema: t.Array(t.Object({
+                                id: t.String(),
+                                studentId: t.String(),
+                                name: t.String(),
+                                relationship: t.String(),
+                                phone: t.String(),
+                                email: t.Optional(t.String()),
+                                address: t.String(),
+                                createdAt: t.String(),
+                                updatedAt: t.String()
+                            }))
+                        }
+                    }
+                }
+            }
         }
     })
 
@@ -131,7 +285,36 @@ const app = new Elysia()
                     t.Literal('excused')
                 ]),
                 notes: t.Optional(t.String())
-            })
+            }),
+            detail: {
+                tags: ['attendance'],
+                summary: 'Record attendance for a student',
+                description: 'Create a new attendance record for a student',
+                responses: {
+                    '200': {
+                        description: 'Attendance recorded successfully',
+                        content: {
+                            'application/json': {
+                                schema: t.Object({
+                                    message: t.String(),
+                                    id: t.String()
+                                })
+                            }
+                        }
+                    },
+                    '400': {
+                        description: 'Validation error',
+                        content: {
+                            'application/json': {
+                                schema: t.Object({
+                                    error: t.String(),
+                                    code: t.Number()
+                                })
+                            }
+                        }
+                    }
+                }
+            }
         }
     )
 
@@ -149,6 +332,36 @@ const app = new Elysia()
             return attendance;
         } catch (error) {
             return [];
+        }
+    },
+    {
+        detail: {
+            tags: ['attendance'],
+            summary: 'Get attendance records of a student',
+            description: 'Retrieve a list of attendance records for a student',
+            responses: {
+                '200': {
+                    description: 'Attendance records retrieved successfully',
+                    content: {
+                        'application/json': {
+                            schema: t.Array(t.Object({
+                                id: t.String(),
+                                studentId: t.String(),
+                                date: t.String(),
+                                status: t.Union([
+                                    t.Literal('present'),
+                                    t.Literal('absent'),
+                                    t.Literal('late'),
+                                    t.Literal('excused')
+                                ]),
+                                notes: t.Optional(t.String()),
+                                createdAt: t.String(),
+                                updatedAt: t.String()
+                            }))
+                        }
+                    }
+                }
+            }
         }
     })
 
@@ -179,7 +392,36 @@ const app = new Elysia()
                 semester: t.String(),
                 grade: t.Number(),
                 notes: t.Optional(t.String())
-            })
+            }),
+            detail: {
+                tags: ['academics'],
+                summary: 'Add an academic record for a student',
+                description: 'Create a new academic record for a student',
+                responses: {
+                    '200': {
+                        description: 'Academic record added successfully',
+                        content: {
+                            'application/json': {
+                                schema: t.Object({
+                                    message: t.String(),
+                                    id: t.String()
+                                })
+                            }
+                        }
+                    },
+                    '400': {
+                        description: 'Validation error',
+                        content: {
+                            'application/json': {
+                                schema: t.Object({
+                                    error: t.String(),
+                                    code: t.Number()
+                                })
+                            }
+                        }
+                    }
+                }
+            }
         }
     )
 
@@ -206,6 +448,32 @@ const app = new Elysia()
             return records;
         } catch (error) {
             return [];
+        }
+    },
+    {
+        detail: {
+            tags: ['academics'],
+            summary: 'Get academic records of a student',
+            description: 'Retrieve a list of academic records for a student',
+            responses: {
+                '200': {
+                    description: 'Academic records retrieved successfully',
+                    content: {
+                        'application/json': {
+                            schema: t.Array(t.Object({
+                                id: t.String(),
+                                studentId: t.String(),
+                                subject: t.String(),
+                                semester: t.String(),
+                                grade: t.Number(),
+                                notes: t.Optional(t.String()),
+                                createdAt: t.String(),
+                                updatedAt: t.String()
+                            }))
+                        }
+                    }
+                }
+            }
         }
     })
 
@@ -238,7 +506,36 @@ const app = new Elysia()
                 address: t.String(),
                 status: t.Optional(t.String()),
                 photo: t.Optional(t.String())
-            })
+            }),
+            detail: {
+                tags: ['students'],
+                summary: 'Create a new student',
+                description: 'Create a new student record',
+                responses: {
+                    '200': {
+                        description: 'Student created successfully',
+                        content: {
+                            'application/json': {
+                                schema: t.Object({
+                                    message: t.String(),
+                                    id: t.String()
+                                })
+                            }
+                        }
+                    },
+                    '400': {
+                        description: 'Validation error',
+                        content: {
+                            'application/json': {
+                                schema: t.Object({
+                                    error: t.String(),
+                                    code: t.Number()
+                                })
+                            }
+                        }
+                    }
+                }
+            }
         }
     )
 
@@ -258,6 +555,44 @@ const app = new Elysia()
         } catch (error) {
             set.status = 500;
             return null;
+        }
+    },
+    {
+        detail: {
+            tags: ['students'],
+            summary: 'Get a student by ID',
+            description: 'Retrieve a student record by ID',
+            responses: {
+                '200': {
+                    description: 'Student retrieved successfully',
+                    content: {
+                        'application/json': {
+                            schema: t.Object({
+                                id: t.String(),
+                                name: t.String(),
+                                age: t.Number(),
+                                grade: t.String(),
+                                address: t.String(),
+                                status: t.String(),
+                                photo: t.Optional(t.String()),
+                                createdAt: t.String(),
+                                updatedAt: t.String()
+                            })
+                        }
+                    }
+                },
+                '404': {
+                    description: 'Student not found',
+                    content: {
+                        'application/json': {
+                            schema: t.Object({
+                                error: t.String(),
+                                code: t.Number()
+                            })
+                        }
+                    }
+                }
+            }
         }
     })
 
@@ -293,6 +628,41 @@ const app = new Elysia()
             };
         } catch (error) {
             return { error: "Failed to fetch students" };
+        }
+    },
+    {
+        detail: {
+            tags: ['students'],
+            summary: 'Get a list of students',
+            description: 'Retrieve a list of student records',
+            responses: {
+                '200': {
+                    description: 'Students retrieved successfully',
+                    content: {
+                        'application/json': {
+                            schema: t.Object({
+                                data: t.Array(t.Object({
+                                    id: t.String(),
+                                    name: t.String(),
+                                    age: t.Number(),
+                                    grade: t.String(),
+                                    address: t.String(),
+                                    status: t.String(),
+                                    photo: t.Optional(t.String()),
+                                    createdAt: t.String(),
+                                    updatedAt: t.String()
+                                })),
+                                pagination: t.Object({
+                                    page: t.Number(),
+                                    limit: t.Number(),
+                                    total: t.Number(),
+                                    totalPages: t.Number()
+                                })
+                            })
+                        }
+                    }
+                }
+            }
         }
     })
 
@@ -330,7 +700,46 @@ const app = new Elysia()
                 address: t.String(),
                 status: t.String(),
                 photo: t.Optional(t.String())
-            })
+            }),
+            detail: {
+                tags: ['students'],
+                summary: 'Update a student',
+                description: 'Update a student record',
+                responses: {
+                    '200': {
+                        description: 'Student updated successfully',
+                        content: {
+                            'application/json': {
+                                schema: t.Object({
+                                    message: t.String()
+                                })
+                            }
+                        }
+                    },
+                    '400': {
+                        description: 'Validation error',
+                        content: {
+                            'application/json': {
+                                schema: t.Object({
+                                    error: t.String(),
+                                    code: t.Number()
+                                })
+                            }
+                        }
+                    },
+                    '404': {
+                        description: 'Student not found',
+                        content: {
+                            'application/json': {
+                                schema: t.Object({
+                                    error: t.String(),
+                                    code: t.Number()
+                                })
+                            }
+                        }
+                    }
+                }
+            }
         }
     )
 
@@ -350,6 +759,36 @@ const app = new Elysia()
         } catch (error) {
             set.status = 500;
             return { error: "Failed to delete student" };
+        }
+    },
+    {
+        detail: {
+            tags: ['students'],
+            summary: 'Delete a student',
+            description: 'Delete a student record',
+            responses: {
+                '200': {
+                    description: 'Student deleted successfully',
+                    content: {
+                        'application/json': {
+                            schema: t.Object({
+                                message: t.String()
+                            })
+                        }
+                    }
+                },
+                '404': {
+                    description: 'Student not found',
+                    content: {
+                        'application/json': {
+                            schema: t.Object({
+                                error: t.String(),
+                                code: t.Number()
+                            })
+                        }
+                    }
+                }
+            }
         }
     })
 
