@@ -10,17 +10,20 @@
     "seed": "bun run src/database/seed.ts"
   },
   "dependencies": {
+    "@elysiajs/cookie": "^0.8.0",
     "@elysiajs/cors": "latest",
-    "@elysiajs/swagger": "latest",
+    "@elysiajs/jwt": "^1.2.0",
     "@elysiajs/static": "latest",
-    "@elysiajs/jwt": "latest",
+    "@elysiajs/swagger": "latest",
+    "bcrypt": "latest",
     "elysia": "latest",
     "sqlite3": "latest",
-    "bcrypt": "latest"
+    "zod": "latest"
   },
   "devDependencies": {
-    "bun-types": "latest",
     "@types/bcrypt": "latest",
-    "@types/sqlite3": "latest"
+    "@types/node": "^22.13.4",
+    "@types/sqlite3": "latest",
+    "bun-types": "latest"
   }
 }

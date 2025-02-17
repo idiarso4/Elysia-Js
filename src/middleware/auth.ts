@@ -2,17 +2,34 @@ import { Elysia } from 'elysia';
 import { jwt } from '@elysiajs/jwt';
 import DB from '../database/db';
 import * as bcrypt from 'bcrypt';
+import type { User } from '../types';
+
+const JWT_SECRET = 'your-super-secret-key-change-this-in-production';
+
+interface JWTPayload {
+    id: string;
+    username: string;
+    role: string;
+}
 
 const authConfig = {
     name: 'auth',
-    seed: 'your-secret-key'  // In production, use environment variable
+    secret: JWT_SECRET
+};
+
+type JWTContext = {
+    jwt: {
+        sign: (payload: JWTPayload) => Promise<string>;
+        verify: (token: string) => Promise<JWTPayload | null>;
+    };
+    headers: Record<string, string | undefined>;
 };
 
 export const auth = new Elysia()
     .use(jwt(authConfig))
-    .derive(async ({ jwt, headers }) => {
+    .derive(async ({ jwt, headers }: JWTContext) => {
         return {
-            authorize: async () => {
+            authorize: async (): Promise<JWTPayload> => {
                 const authorization = headers.authorization;
                 if (!authorization) throw new Error('No authorization header');
 
@@ -27,8 +44,8 @@ export const auth = new Elysia()
         };
     });
 
-export async function validateUser(username: string, password: string) {
-    const user = await DB.get(
+export async function validateUser(username: string, password: string): Promise<User> {
+    const user = await DB.get<User>(
         'SELECT * FROM users WHERE username = ?',
         [username]
     );
@@ -45,11 +62,19 @@ export async function validateUser(username: string, password: string) {
     return user;
 }
 
+interface AuthContext {
+    authorize: () => Promise<JWTPayload>;
+}
+
 export function requireRole(roles: string[]) {
-    return async ({ authorize }: any) => {
-        const payload = await authorize();
-        if (!roles.includes(payload.role)) {
-            throw new Error('Unauthorized role');
+    return async ({ authorize }: AuthContext) => {
+        try {
+            const payload = await authorize();
+            if (!roles.includes(payload.role)) {
+                throw new Error('Unauthorized');
+            }
+        } catch (error) {
+            throw new Error('Unauthorized');
         }
     };
 }

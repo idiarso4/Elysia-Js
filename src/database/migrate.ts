@@ -31,7 +31,7 @@ const migrations = [
         name TEXT NOT NULL,
         relationship TEXT NOT NULL,
         phone TEXT NOT NULL,
-        email TEXT NOT NULL,
+        email TEXT,
         address TEXT NOT NULL,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL,
@@ -42,9 +42,10 @@ const migrations = [
         id TEXT PRIMARY KEY,
         studentId TEXT NOT NULL,
         date TEXT NOT NULL,
-        status TEXT NOT NULL,
-        note TEXT,
+        status TEXT NOT NULL CHECK(status IN ('present', 'absent', 'late', 'excused')),
+        notes TEXT,
         createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
         FOREIGN KEY (studentId) REFERENCES students(id) ON DELETE CASCADE
     )`,
     
@@ -52,12 +53,11 @@ const migrations = [
         id TEXT PRIMARY KEY,
         studentId TEXT NOT NULL,
         subject TEXT NOT NULL,
-        score INTEGER NOT NULL,
-        term TEXT NOT NULL,
-        year TEXT NOT NULL,
-        teacher TEXT NOT NULL,
-        comments TEXT,
+        semester TEXT NOT NULL,
+        grade REAL NOT NULL,
+        notes TEXT,
         createdAt TEXT NOT NULL,
+        updatedAt TEXT NOT NULL,
         FOREIGN KEY (studentId) REFERENCES students(id) ON DELETE CASCADE
     )`,
     
