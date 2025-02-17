@@ -1,0 +1,303 @@
+:root {
+    --primary-bg: #ffffff;
+    --secondary-bg: #f8f9fa;
+    --text-color: #2c3e50;
+    --border-color: #dee2e6;
+    --card-shadow: 0 0 10px rgba(0,0,0,0.1);
+}
+
+[data-theme="dark"] {
+    --primary-bg: #1a1a1a;
+    --secondary-bg: #2d2d2d;
+    --text-color: #ffffff;
+    --border-color: #404040;
+    --card-shadow: 0 0 10px rgba(255,255,255,0.1);
+}
+
+body {
+    background-color: var(--primary-bg);
+    color: var(--text-color);
+    transition: background-color 0.3s, color 0.3s;
+}
+
+.container {
+    max-width: 1200px;
+}
+
+.card {
+    background-color: var(--primary-bg);
+    box-shadow: var(--card-shadow);
+    border: 1px solid var(--border-color);
+    margin-bottom: 1rem;
+}
+
+.table th {
+    background-color: var(--secondary-bg);
+}
+
+.table td, .table th {
+    color: var(--text-color);
+    border-color: var(--border-color);
+}
+
+.btn-action {
+    margin: 0 2px;
+}
+
+.form-control {
+    background-color: var(--primary-bg);
+    color: var(--text-color);
+    border-color: var(--border-color);
+}
+
+.form-control:focus {
+    background-color: var(--primary-bg);
+    color: var(--text-color);
+    box-shadow: 0 0 0 0.2rem rgba(0,123,255,0.25);
+    border-color: #80bdff;
+}
+
+.card-title {
+    color: var(--text-color);
+    font-weight: 600;
+}
+
+.btn {
+    margin-right: 5px;
+}
+
+.table-responsive {
+    overflow-x: auto;
+}
+
+.statistics-card {
+    background-color: var(--secondary-bg);
+    padding: 1rem;
+    border-radius: 0.5rem;
+    margin-bottom: 1rem;
+}
+
+.statistics-value {
+    font-size: 1.5rem;
+    font-weight: bold;
+    color: #007bff;
+}
+
+.attendance-badge {
+    padding: 0.25rem 0.5rem;
+    border-radius: 0.25rem;
+    font-size: 0.875rem;
+}
+
+.attendance-present {
+    background-color: #28a745;
+    color: white;
+}
+
+.attendance-absent {
+    background-color: #dc3545;
+    color: white;
+}
+
+.attendance-late {
+    background-color: #ffc107;
+    color: black;
+}
+
+.chart-container {
+    height: 300px;
+    margin-bottom: 1rem;
+}
+
+.theme-switch {
+    position: fixed;
+    top: 1rem;
+    right: 1rem;
+    z-index: 1000;
+}
+
+/* Timeline styles */
+.timeline {
+    position: relative;
+    padding: 20px 0;
+}
+
+.timeline::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 50px;
+    height: 100%;
+    width: 2px;
+    background-color: var(--border-color);
+}
+
+.timeline-item {
+    position: relative;
+    margin-bottom: 30px;
+    padding-left: 70px;
+}
+
+.timeline-date {
+    position: absolute;
+    left: 0;
+    width: 50px;
+    text-align: right;
+    padding-right: 15px;
+    color: var(--text-color);
+    font-size: 0.85rem;
+}
+
+.timeline-content {
+    background-color: var(--secondary-bg);
+    padding: 15px;
+    border-radius: 5px;
+    box-shadow: var(--card-shadow);
+}
+
+.timeline-title {
+    font-weight: bold;
+    margin-bottom: 10px;
+}
+
+.timeline-details {
+    font-size: 0.9rem;
+    color: var(--text-color);
+}
+
+/* Event type styles */
+.timeline-item.academic .timeline-content {
+    border-left: 4px solid #007bff;
+}
+
+.timeline-item.attendance .timeline-content {
+    border-left: 4px solid #28a745;
+}
+
+.timeline-item.communication .timeline-content {
+    border-left: 4px solid #ffc107;
+}
+
+.timeline-item.document .timeline-content {
+    border-left: 4px solid #dc3545;
+}
+
+/* Schedule styles */
+.schedule-card {
+    border-left: 4px solid;
+    margin-bottom: 10px;
+}
+
+.schedule-card.class {
+    border-color: #007bff;
+}
+
+.schedule-card.exam {
+    border-color: #dc3545;
+}
+
+.schedule-card.activity {
+    border-color: #28a745;
+}
+
+.schedule-card.meeting {
+    border-color: #ffc107;
+}
+
+/* Document styles */
+.document-card {
+    display: flex;
+    align-items: center;
+    padding: 10px;
+    margin-bottom: 10px;
+    background-color: var(--secondary-bg);
+    border-radius: 5px;
+}
+
+.document-icon {
+    font-size: 24px;
+    margin-right: 15px;
+}
+
+.document-info {
+    flex-grow: 1;
+}
+
+.document-actions {
+    display: flex;
+    gap: 5px;
+}
+
+/* Communication styles */
+.communication-status {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.85rem;
+}
+
+.communication-status.sent {
+    background-color: #28a745;
+    color: white;
+}
+
+.communication-status.draft {
+    background-color: #6c757d;
+    color: white;
+}
+
+.communication-status.scheduled {
+    background-color: #ffc107;
+    color: black;
+}
+
+/* Modal enhancements */
+.modal-body {
+    max-height: 70vh;
+    overflow-y: auto;
+}
+
+.modal-xl {
+    max-width: 1200px;
+}
+
+@media (max-width: 768px) {
+    .container {
+        padding: 10px;
+    }
+    
+    .statistics-card {
+        margin-bottom: 0.5rem;
+    }
+    
+    .chart-container {
+        height: 200px;
+    }
+    
+    .timeline::before {
+        left: 30px;
+    }
+
+    .timeline-item {
+        padding-left: 50px;
+    }
+
+    .timeline-date {
+        width: 30px;
+        font-size: 0.75rem;
+    }
+
+    .document-card {
+        flex-direction: column;
+        text-align: center;
+    }
+
+    .document-icon {
+        margin-right: 0;
+        margin-bottom: 10px;
+    }
+
+    .document-actions {
+        margin-top: 10px;
+    }
+}

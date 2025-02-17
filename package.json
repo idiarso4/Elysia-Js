@@ -1,0 +1,26 @@
+{
+  "name": "student-data-api",
+  "version": "1.0.0",
+  "description": "Student Data Management System using Elysia.js",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "bun run --watch src/index.ts",
+    "start": "bun run src/index.ts",
+    "migrate": "bun run src/database/migrate.ts",
+    "seed": "bun run src/database/seed.ts"
+  },
+  "dependencies": {
+    "@elysiajs/cors": "latest",
+    "@elysiajs/swagger": "latest",
+    "@elysiajs/static": "latest",
+    "@elysiajs/jwt": "latest",
+    "elysia": "latest",
+    "sqlite3": "latest",
+    "bcrypt": "latest"
+  },
+  "devDependencies": {
+    "bun-types": "latest",
+    "@types/bcrypt": "latest",
+    "@types/sqlite3": "latest"
+  }
+}
