@@ -8,6 +8,9 @@ import { auth, validateUser, requireRole, AuthError, ValidationError } from './m
 import DB from './database/db';
 import { randomUUID } from 'crypto';
 import type { Student, Guardian, Attendance, AcademicRecord, User, LoginResponse } from './types';
+import { authController } from './controllers/auth';
+import bcrypt from 'bcrypt';
+import jwtToken from 'jsonwebtoken';
 
 interface JWTPayload extends Record<string, string | number> {
     id: string;
@@ -17,8 +20,29 @@ interface JWTPayload extends Record<string, string | number> {
     exp?: number;
 }
 
+interface ErrorResponse {
+    status: number;
+    message: string;
+}
+
+interface LoginRequest {
+    username: string;
+    password: string;
+}
+
+interface LoginResponse {
+    token: string;
+    user: Omit<User, 'password'>;
+}
+
+const JWT_SECRET = 'your-super-secret-key';
+
 const app = new Elysia()
-    .use(cors())
+    .use(cors({
+        origin: ['http://localhost:3000'],
+        methods: ['GET', 'POST', 'PUT', 'DELETE'],
+        credentials: true,
+    }))
     .use(swagger({
         documentation: {
             info: {
@@ -51,11 +75,12 @@ const app = new Elysia()
     .use(staticPlugin())
     .use(jwt({
         name: 'jwt',
-        secret: process.env.JWT_SECRET || 'your-secret-key',
+        secret: JWT_SECRET,
         exp: '7d'
     }))
     .use(cookie())
     .use(auth)
+    .use(authController)
     .onError(({ code, error, set }) => {
         if (error instanceof AuthError || error instanceof ValidationError) {
             set.status = error.status;
@@ -72,36 +97,72 @@ const app = new Elysia()
             code: set.status
         };
     })
-    .get("/", () => Bun.file("public/index.html"))
+    .get("/", () => 'Student Management System API')
     
     // Authentication
     .post("/login", 
-        async ({ body, jwt }) => {
-            const { username, password } = body as { username: string; password: string };
+        async ({ body, jwt }: { body: LoginRequest, jwt: any }): Promise<{ status: number; body: LoginResponse | ErrorResponse }> => {
+            const { username, password } = body;
             
-            try {
-                const user = await validateUser(username, password);
-                const payload: JWTPayload = {
-                    id: user.id,
-                    username: user.username,
-                    role: user.role as 'admin' | 'teacher' | 'staff'
-                };
-                
-                const token = await jwt.sign(payload);
-                
-                return {
-                    token,
-                    user: {
-                        username: user.username,
-                        role: user.role
+            return new Promise((resolve) => {
+                DB.get<User>(
+                    'SELECT * FROM users WHERE username = ?',
+                    [username],
+                    async (err, user) => {
+                        if (err) {
+                            resolve({
+                                status: 500,
+                                body: { message: 'Internal server error' }
+                            });
+                            return;
+                        }
+
+                        if (!user) {
+                            resolve({
+                                status: 401,
+                                body: { message: 'Username atau password salah' }
+                            });
+                            return;
+                        }
+
+                        try {
+                            const validPassword = await bcrypt.compare(password, user.password);
+                            if (!validPassword) {
+                                resolve({
+                                    status: 401,
+                                    body: { message: 'Username atau password salah' }
+                                });
+                                return;
+                            }
+
+                            // Generate JWT token
+                            const token = await jwt.sign({
+                                id: user.id,
+                                username: user.username,
+                                role: user.role,
+                            },
+                            JWT_SECRET,
+                            { expiresIn: '24h' }
+                            );
+
+                            const { password: _, ...userWithoutPassword } = user;
+
+                            resolve({
+                                status: 200,
+                                body: {
+                                    token,
+                                    user: userWithoutPassword
+                                }
+                            });
+                        } catch (error) {
+                            resolve({
+                                status: 500,
+                                body: { message: 'Internal server error' }
+                            });
+                        }
                     }
-                } satisfies LoginResponse;
-            } catch (error) {
-                if (error instanceof ValidationError) {
-                    throw error;
-                }
-                throw new AuthError('Authentication failed');
-            }
+                );
+            });
         },
         {
             body: t.Object({
@@ -156,8 +217,8 @@ const app = new Elysia()
 
     // Guardian Management
     .post("/students/:studentId/guardians",
-        async ({ params: { studentId }, body, set }) => {
-            const guardian = body as Omit<Guardian, 'id' | 'createdAt' | 'updatedAt'>;
+        async ({ params: { studentId }, body, set }: { params: { studentId: string }, body: Omit<Guardian, 'id' | 'createdAt' | 'updatedAt'>, set: any }): Promise<{ status: number; body: { message: string; id: string } | ErrorResponse }> => {
+            const guardian = body;
             const id = randomUUID();
             const now = new Date().toISOString();
 
@@ -169,10 +230,9 @@ const app = new Elysia()
                      guardian.email || null, guardian.address, now, now]
                 );
 
-                return { message: "Guardian added successfully", id };
+                return { status: 200, body: { message: "Guardian added successfully", id } };
             } catch (error) {
-                set.status = 400;
-                return { error: "Failed to add guardian" };
+                return { status: 400, body: { message: "Failed to add guardian" } };
             }
         },
         {
@@ -215,7 +275,7 @@ const app = new Elysia()
         }
     )
 
-    .get("/students/:studentId/guardians", async ({ params: { studentId } }): Promise<Guardian[]> => {
+    .get("/students/:studentId/guardians", async ({ params: { studentId } }: { params: { studentId: string } }): Promise<Guardian[]> => {
         try {
             const guardians = await DB.all<Guardian>(
                 "SELECT * FROM guardians WHERE studentId = ?",
@@ -256,8 +316,8 @@ const app = new Elysia()
 
     // Attendance Management
     .post("/students/:studentId/attendance",
-        async ({ params: { studentId }, body, set }) => {
-            const attendance = body as Omit<Attendance, 'id' | 'studentId' | 'createdAt' | 'updatedAt'>;
+        async ({ params: { studentId }, body, set }: { params: { studentId: string }, body: Omit<Attendance, 'id' | 'studentId' | 'createdAt' | 'updatedAt'>, set: any }): Promise<{ status: number; body: { message: string; id: string } | ErrorResponse }> => {
+            const attendance = body;
             const id = randomUUID();
             const now = new Date().toISOString();
 
@@ -269,10 +329,9 @@ const app = new Elysia()
                      attendance.notes || null, now, now]
                 );
 
-                return { message: "Attendance recorded successfully", id };
+                return { status: 200, body: { message: "Attendance recorded successfully", id } };
             } catch (error) {
-                set.status = 400;
-                return { error: "Failed to record attendance" };
+                return { status: 400, body: { message: "Failed to record attendance" } };
             }
         },
         {
@@ -318,7 +377,7 @@ const app = new Elysia()
         }
     )
 
-    .get("/students/:studentId/attendance", async ({ params: { studentId }, query }): Promise<Attendance[]> => {
+    .get("/students/:studentId/attendance", async ({ params: { studentId }, query }: { params: { studentId: string }, query: any }): Promise<Attendance[]> => {
         const startDate = query?.startDate as string || '1970-01-01';
         const endDate = query?.endDate as string || '2100-12-31';
 
@@ -367,8 +426,8 @@ const app = new Elysia()
 
     // Academic Records Management
     .post("/students/:studentId/academics",
-        async ({ params: { studentId }, body, set }) => {
-            const record = body as Omit<AcademicRecord, 'id' | 'studentId' | 'createdAt' | 'updatedAt'>;
+        async ({ params: { studentId }, body, set }: { params: { studentId: string }, body: Omit<AcademicRecord, 'id' | 'studentId' | 'createdAt' | 'updatedAt'>, set: any }): Promise<{ status: number; body: { message: string; id: string } | ErrorResponse }> => {
+            const record = body;
             const id = randomUUID();
             const now = new Date().toISOString();
 
@@ -380,10 +439,9 @@ const app = new Elysia()
                      record.notes || null, now, now]
                 );
 
-                return { message: "Academic record added successfully", id };
+                return { status: 200, body: { message: "Academic record added successfully", id } };
             } catch (error) {
-                set.status = 400;
-                return { error: "Failed to add academic record" };
+                return { status: 400, body: { message: "Failed to add academic record" } };
             }
         },
         {
@@ -425,7 +483,7 @@ const app = new Elysia()
         }
     )
 
-    .get("/students/:studentId/academics", async ({ params: { studentId }, query }): Promise<AcademicRecord[]> => {
+    .get("/students/:studentId/academics", async ({ params: { studentId }, query }: { params: { studentId: string }, query: any }): Promise<AcademicRecord[]> => {
         const semester = query?.semester as string;
         const subject = query?.subject as string;
 
@@ -479,8 +537,8 @@ const app = new Elysia()
 
     // Student Management
     .post("/students", 
-        async ({ body, set }) => {
-            const student = body as Omit<Student, 'id' | 'createdAt' | 'updatedAt'>;
+        async ({ body, set }: { body: Omit<Student, 'id' | 'createdAt' | 'updatedAt'>, set: any }): Promise<{ status: number; body: { message: string; id: string } | ErrorResponse }> => {
+            const student = body;
             const id = randomUUID();
             const now = new Date().toISOString();
 
@@ -492,10 +550,9 @@ const app = new Elysia()
                      student.status || 'active', student.photo || null, now, now]
                 );
 
-                return { message: "Student created successfully", id };
+                return { status: 200, body: { message: "Student created successfully", id } };
             } catch (error) {
-                set.status = 400;
-                return { error: "Failed to create student" };
+                return { status: 400, body: { message: "Failed to create student" } };
             }
         },
         {
@@ -539,7 +596,7 @@ const app = new Elysia()
         }
     )
 
-    .get("/students/:id", async ({ params: { id }, set }): Promise<Student | null> => {
+    .get("/students/:id", async ({ params: { id }, set }: { params: { id: string }, set: any }): Promise<{ status: number; body: Student | null | ErrorResponse }> => {
         try {
             const student = await DB.get<Student>(
                 "SELECT * FROM students WHERE id = ?",
@@ -547,14 +604,12 @@ const app = new Elysia()
             );
 
             if (!student) {
-                set.status = 404;
-                return null;
+                return { status: 404, body: { message: "Student not found" } };
             }
 
-            return student;
+            return { status: 200, body: student };
         } catch (error) {
-            set.status = 500;
-            return null;
+            return { status: 500, body: { message: "Internal server error" } };
         }
     },
     {
@@ -596,7 +651,7 @@ const app = new Elysia()
         }
     })
 
-    .get("/students", async ({ query }) => {
+    .get("/students", async ({ query }: { query: any }): Promise<{ status: number; body: { data: Student[]; pagination: any } | ErrorResponse }> => {
         const page = Number(query?.page) || 1;
         const limit = Number(query?.limit) || 10;
         const offset = (page - 1) * limit;
@@ -618,16 +673,19 @@ const app = new Elysia()
             const total = totalResult?.count || 0;
 
             return {
-                data: students,
-                pagination: {
-                    page,
-                    limit,
-                    total,
-                    totalPages: Math.ceil(total / limit)
+                status: 200,
+                body: {
+                    data: students,
+                    pagination: {
+                        page,
+                        limit,
+                        total,
+                        totalPages: Math.ceil(total / limit)
+                    }
                 }
             };
         } catch (error) {
-            return { error: "Failed to fetch students" };
+            return { status: 500, body: { message: "Internal server error" } };
         }
     },
     {
@@ -667,8 +725,8 @@ const app = new Elysia()
     })
 
     .put("/students/:id", 
-        async ({ params: { id }, body, set }) => {
-            const student = body as Omit<Student, 'id' | 'createdAt' | 'updatedAt'>;
+        async ({ params: { id }, body, set }: { params: { id: string }, body: Omit<Student, 'id' | 'createdAt' | 'updatedAt'>, set: any }): Promise<{ status: number; body: { message: string } | ErrorResponse }> => {
+            const student = body;
             const now = new Date().toISOString();
 
             try {
@@ -682,14 +740,12 @@ const app = new Elysia()
                 );
 
                 if (!result.changes) {
-                    set.status = 404;
-                    return { error: "Student not found" };
+                    return { status: 404, body: { message: "Student not found" } };
                 }
 
-                return { message: "Student updated successfully" };
+                return { status: 200, body: { message: "Student updated successfully" } };
             } catch (error) {
-                set.status = 400;
-                return { error: "Failed to update student" };
+                return { status: 400, body: { message: "Failed to update student" } };
             }
         },
         {
@@ -743,7 +799,7 @@ const app = new Elysia()
         }
     )
 
-    .delete("/students/:id", async ({ params: { id }, set }) => {
+    .delete("/students/:id", async ({ params: { id }, set }: { params: { id: string }, set: any }): Promise<{ status: number; body: { message: string } | ErrorResponse }> => {
         try {
             const result = await DB.run(
                 "DELETE FROM students WHERE id = ?",
@@ -751,14 +807,12 @@ const app = new Elysia()
             );
 
             if (!result.changes) {
-                set.status = 404;
-                return { error: "Student not found" };
+                return { status: 404, body: { message: "Student not found" } };
             }
 
-            return { message: "Student deleted successfully" };
+            return { status: 200, body: { message: "Student deleted successfully" } };
         } catch (error) {
-            set.status = 500;
-            return { error: "Failed to delete student" };
+            return { status: 500, body: { message: "Failed to delete student" } };
         }
     },
     {
@@ -792,6 +846,8 @@ const app = new Elysia()
         }
     })
 
-    .listen(3000);
+    .listen(3001);
 
-console.log(`🦊 Server is running at ${app.server?.hostname}:${app.server?.port}`);
+console.log(
+    `🦊 Server is running at ${app.server?.hostname}:${app.server?.port}`
+);

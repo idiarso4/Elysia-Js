@@ -4,11 +4,15 @@ const db = new Database('student_data.db');
 
 // Create tables
 const migrations = [
+    `DROP TABLE IF EXISTS users`,
+    
     `CREATE TABLE IF NOT EXISTS users (
         id TEXT PRIMARY KEY,
         username TEXT UNIQUE NOT NULL,
         password TEXT NOT NULL,
         role TEXT NOT NULL,
+        name TEXT NOT NULL,
+        email TEXT UNIQUE NOT NULL,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL
     )`,
@@ -53,8 +57,9 @@ const migrations = [
         id TEXT PRIMARY KEY,
         studentId TEXT NOT NULL,
         subject TEXT NOT NULL,
-        semester TEXT NOT NULL,
         grade REAL NOT NULL,
+        term TEXT NOT NULL,
+        year TEXT NOT NULL,
         notes TEXT,
         createdAt TEXT NOT NULL,
         updatedAt TEXT NOT NULL,
@@ -103,7 +108,7 @@ const migrations = [
     )`
 ];
 
-// Run migrations
+// Run migrations sequentially
 async function runMigrations() {
     for (const migration of migrations) {
         await new Promise<void>((resolve, reject) => {
@@ -112,13 +117,14 @@ async function runMigrations() {
                     console.error('Migration failed:', err);
                     reject(err);
                 } else {
-                    console.log('Migration successful');
+                    console.log('Migration successful:', migration.split('\n')[0]);
                     resolve();
                 }
             });
         });
     }
     
+    console.log('All migrations completed');
     db.close();
 }
 
